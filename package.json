@@ -1,0 +1,17 @@
+{
+  "name": "cot",
+  "description": "bare-bones couchdb interface for node",
+  "keywords": ["couch", "couchdb"],
+  "version": "0.0.1",
+  "main": "cot"
+  "dependencies": {},
+  "author": {
+    "name": "Will Conant",
+    "email": "will.conant@gmail.com",
+    "url": "http://willconant.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/willconant/cot-node"
+  }  
+}
