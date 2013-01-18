@@ -1,6 +1,6 @@
 # What is Cot? #
 
-Cot is a rather simple, but quite pleasant interface for CouchDB. It doesn't attempt to implement everything, but it covers the important stuff for using couch as an effective database.
+Cot is a rather simple but quite pleasant interface for CouchDB. It doesn't attempt to implement everything, but it covers the important stuff for using couch as an effective database.
 
     var Cot = require('cot');
     var cot = new Cot(5984, 'localhost');

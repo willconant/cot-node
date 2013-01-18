@@ -3,7 +3,7 @@
   "description": "bare-bones couchdb interface for node",
   "keywords": ["couch", "couchdb"],
   "version": "0.0.1",
-  "main": "cot"
+  "main": "cot",
   "dependencies": {},
   "author": {
     "name": "Will Conant",

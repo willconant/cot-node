@@ -181,7 +181,7 @@ DbHandle.prototype = {
 				next(null, doc);
 			}
 			else {
-				next(null);
+				next(null, null);
 			}
 		});
 	},
