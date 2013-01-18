@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013 William R. Conant, http://willconant.com/
+Copyright (c) 2013 Will Conant, http://willconant.com/
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
