@@ -1,24 +1,34 @@
 var chai = require('chai');
 var expect = chai.expect;
 var Cot = require('../cot');
+var config = require('./config');
 
-describe('DbHandle', function() {
-	var port = 5984;
-	var hostname = 'localhost';
-	var dbName = 'test-cot-node';
-	
-	var cot = new Cot(port, hostname);
-	var db = cot.db(dbName);
+describe('Cot', function() {
+	it('should include port in host header when port not default for protocol', function() {
+		var c1 = new Cot({port: 80, hostname: 'foo'});
+		expect(c1.hostHeader).to.equal('foo');
+		var c2 = new Cot({port: 8080, hostname: 'foo'});
+		expect(c2.hostHeader).to.equal('foo:8080');
+		var c3 = new Cot({port: 443, hostname: 'foo', ssl: true});
+		expect(c3.hostHeader).to.equal('foo');
+		var c4 = new Cot({port: 8080, hostname: 'foo', ssl: true});
+		expect(c4.hostHeader).to.equal('foo:8080');
+	});
+});
+
+describe('DbHandle', function() {	
+	var cot = new Cot(config.serverOpts);
+	var db = cot.db(config.dbName);
 	
 	beforeEach(function(done) {
-		cot.DELETE('/' + dbName, {}, onDelete);
+		cot.DELETE('/' + config.dbName, {}, onDelete);
 		
 		function onDelete(err) {
 			if (err) {
 				done(err);
 			}
 			else {
-				cot.PUT('/' + dbName, '', {}, onPut);
+				cot.PUT('/' + config.dbName, '', {}, onPut);
 			}
 		}
 		
