@@ -22,7 +22,6 @@ THE SOFTWARE.
 
 'use strict';
 
-var http = require('http');
 var querystring = require('querystring');
 
 var viewQueryKeys = [
@@ -36,23 +35,31 @@ var changesQueryKeys = ['filter', 'include_docs', 'limit', 'since', 'timeout'];
 
 module.exports = Cot;
 
-function Cot(port, host) {
-	this.port = port;
-	this.host = host;
+function Cot(opts) {
+	this.port = opts.port;
+	this.hostname = opts.hostname;
+	this.auth = opts.auth;
+	this.ssl = opts.ssl;
+	this.http = opts.ssl ? require('https') : require('http');
+	this.hostHeader = this.hostname;
+	if ((!this.ssl && this.port !== 80) || (this.ssl && this.port !== 443)) {
+		this.hostHeader += ':' + this.port;
+	}
 }
 
 Cot.prototype = {
 	reqOpts: function (method, path, headers) {
 		var opts = {
-			host: this.host,
+			hostname: this.hostname,
 			port: this.port,
+			auth: this.auth,
 			path: path,
 			method: method,
 			headers: headers || {}
 		};
 		
-		opts.headers.host = this.host;
-		
+		opts.headers.host = this.hostHeader;
+				
 		return opts;
 	},
 	
@@ -97,7 +104,7 @@ Cot.prototype = {
 			headers.accept = 'application/json';
 		}
 	
-		var request = http.request(this.reqOpts('GET', path, headers));
+		var request = this.http.request(this.reqOpts('GET', path, headers));
 		this.processResponse(request, next);
 	},
 	
@@ -107,7 +114,7 @@ Cot.prototype = {
 			headers.accept = 'application/json';
 		}
 	
-		var request = http.request(this.reqOpts('DELETE', path, headers));
+		var request = this.http.request(this.reqOpts('DELETE', path, headers));
 		this.processResponse(request, next);
 	},
 	
@@ -125,7 +132,7 @@ Cot.prototype = {
 			body = new Buffer(body, 'utf8');
 		}
 		
-		var request = http.request(this.reqOpts(which, path, headers));
+		var request = this.http.request(this.reqOpts(which, path, headers));
 		request.write(body);
 		this.processResponse(request, next);
 	},
