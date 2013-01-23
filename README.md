@@ -3,7 +3,7 @@
 Cot is a rather simple but quite pleasant interface for CouchDB. It doesn't attempt to implement everything, but it covers the important stuff for using couch as an effective database.
 
     var Cot = require('cot');
-    var cot = new Cot(5984, 'localhost');
+    var cot = new Cot({port: 5984, hostname: 'localhost'});
     var db = cot.db('my-db');
     
     db.getDoc('counter', onGet);
@@ -50,9 +50,21 @@ There's actually a utility function for an optimistic update loop:
 
 # API Reference #
 
-## cot = new Cot(port, host) ##
+## cot = new Cot(opts) ##
+
+`opts` must contain the following keys:
+
+  - `port`: the port number of your couchdb server
+  - `hostname`: the hostname of your couchdb server
+
+`opts` may contain the following keys:
+
+  - `ssl`: if set to true, Cot will use https
+  - `auth`: may be set to a string in the format 'username:password' for basic auth
 
 ## db = cot.db(dbName) ##
+
+Returns an object representing the specified database.
 
 ## db.info(next(err, info)) ##
 
@@ -106,7 +118,7 @@ Queries a view with the given name in the given design doc. `query` should be an
   - startkey_docid
   - update_seq
 
-Refer to the CouchDB API documentation for their meanings.
+For more information, refer to http://wiki.apache.org/couchdb/HTTP_view_API#Querying_Options
 
 ## db.allDocs(query, next(err, response))
 
@@ -122,5 +134,18 @@ Loads documents with the specified keys.
 
 ## db.postBulkDocs(docs, allOrNothing, next(err, response))
 
+Posts multiple updates to the database in one request. `docs` should be an array of documents. `allOrNothing` should be a boolean. See http://wiki.apache.org/couchdb/HTTP_Bulk_Document_API for more information.
+
 ## db.changes(query, next)
+
+Queries the changes feed given the specified query. `query` may contain the following keys:
+
+  - `filter`: filter function to use
+  - `include_docs`: if true, results will contain entire document
+  - `limit`: the maximum number of change rows this query should return
+  - `since`: results will start immediately after the sequence number provided here
+  - `longpoll`: if true, query will send feed=longpoll
+  - `timeout`: timeout in milliseconds for logpoll queries
+
+For more information about the CouchDB changes feed, see http://wiki.apache.org/couchdb/HTTP_database_API#Changes
 
