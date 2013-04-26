@@ -2,7 +2,7 @@
   "name": "cot",
   "description": "bare-bones couchdb interface for node",
   "keywords": ["couch", "couchdb"],
-  "version": "0.0.2",
+  "version": "0.0.3",
   "main": "cot",
   "dependencies": {},
   "author": {
