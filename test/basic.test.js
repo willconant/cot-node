@@ -37,7 +37,20 @@ describe('DbHandle', function() {
 				done(err);
 			}
 			else {
-				db.putDoc({_id: 'person-1', type: 'person', name: 'Will Conant'}, done);
+				db.putDoc({_id: 'person-1', type: 'person', name: 'Will Conant'}, onPutDoc);
+			}
+		}
+		
+		function onPutDoc(err) {
+			if (err) {
+				done(err);
+			}
+			else {
+				db.putDoc({_id: '_design/test', views: {
+					testView: {
+						map: 'function(d) { emit(d.name, null) }'
+					}
+				}}, done);
 			}
 		}
 	});
@@ -52,7 +65,7 @@ describe('DbHandle', function() {
 				}
 				else {
 					expect(info).to.be.a('object');
-					expect(info.doc_count).to.equal(1);
+					expect(info.doc_count).to.equal(2);
 					done();
 				}
 			}
@@ -101,6 +114,25 @@ describe('DbHandle', function() {
 				else {
 					expect(doc).to.be.a('object');
 					expect(doc.name).to.equal('Will Conant');
+					done();
+				}
+			}
+		});
+	});
+	
+	describe('#view', function() {
+		it('should return a single row', function(done) {
+			db.view('test', 'testView', {}, onView);
+			
+			function onView(err, response) {
+				if (err) {
+					done(err)
+				}
+				else {
+					expect(response).to.be.object;
+					expect(response.rows).to.be.array;
+					expect(response.rows.length).to.equal(1);
+					expect(response.rows[0].key).to.equal('Will Conant');
 					done();
 				}
 			}

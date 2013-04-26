@@ -281,7 +281,7 @@ DbHandle.prototype = {
 		var url = '/' + this.name + '/' + path;
 		var q = {};
 		viewQueryKeys.forEach(function (key) {
-			if (!undef(query[key])) {
+			if (typeof query[key] !== 'undefined') {
 				q[key] = JSON.stringify(query[key]);
 			}
 		});
@@ -356,7 +356,7 @@ DbHandle.prototype = {
 		query = query || {};
 		var q = {};
 		changesQueryKeys.forEach(function (key) {
-			if (!undef(query[key])) {
+			if (typeof query[key] !== 'undefined') {
 				q[key] = JSON.stringify(query[key]);
 			}
 		});
