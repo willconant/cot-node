@@ -282,7 +282,12 @@ DbHandle.prototype = {
 		var q = {};
 		viewQueryKeys.forEach(function (key) {
 			if (typeof query[key] !== 'undefined') {
-				q[key] = JSON.stringify(query[key]);
+				if (key === 'startkey_docid' || key === 'endkey_docid') {
+					q[key] = query[key];
+				}
+				else {
+					q[key] = JSON.stringify(query[key]);
+				}
 			}
 		});
 		
