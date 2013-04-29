@@ -82,17 +82,15 @@ Cot.prototype = {
 				response.body = buffer;
 				
 				if (response.headers['content-type'] === 'application/json') {
-					trycatch(function (_) { return JSON.parse(response.body); }, onParsed);
+					try {
+						response.json = JSON.parse(response.body);
+					}
+					catch (err) {
+						next(err);
+						return;
+					}
 				}
-				else {
-					next(null, response);
-				}
-			}
-			
-			function onParsed(err, json) {
-				if (err) { next(err); return; }
 				
-				response.json = json;
 				next(null, response);
 			}
 		}
@@ -411,15 +409,6 @@ function readAllText(stream, limit, next) {
 	stream.on('end', function () {
 		next(null, buffer);
 	});
-}
-
-function trycatch(fn, next) {
-	try {
-		next(null, fn());
-	}
-	catch (err) {
-		next(err);
-	}
 }
 
 function once(f) {
