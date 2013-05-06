@@ -155,6 +155,9 @@ function DbHandle(cot, name) {
 
 DbHandle.prototype = {
 	docUrl: function (docId) {
+		if (typeof docId !== 'string') {
+			throw new TypeError('doc id must be a string');
+		}
 		if (docId.indexOf('_design/') !== 0) {
 			docId = encodeURIComponent(docId);
 		}
@@ -210,6 +213,33 @@ DbHandle.prototype = {
 			}
 			else {
 				next(new Error('error putting doc ' + doc._id + ': ' + response.body));
+			}
+		});
+	},
+	
+	postDoc: function (doc, opts, next) {
+		if (typeof next === 'undefined') {
+			next = opts;
+			opts = null;
+		}
+		
+		var url = '/' + this.name;
+		if (opts && opts.batch) {
+			url += '?batch=ok';
+		}
+
+		if (typeof doc._id !== 'undefined') {
+			throw new Error('doc._id must not be set when posting new document');
+		}
+		
+		this.cot.POST(url, doc, null, function (err, response) {
+			if (err) { next(err); return; }
+			
+			if (response.statusCode === 201 || response.statusCode === 202) {
+				next(null, response.json);
+			}
+			else {
+				next(new Error('error posting doc ' + doc._id + ': ' + response.body));
 			}
 		});
 	},
