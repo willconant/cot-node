@@ -1,8 +1,8 @@
 {
   "name": "cot",
-  "description": "bare-bones couchdb interface for node",
-  "keywords": ["couch", "couchdb"],
-  "version": "0.0.4",
+  "description": "promise-based CouchDB library for node with no surprises (in a good way)",
+  "keywords": ["couch", "couchdb", "promise", "promises"],
+  "version": "0.0.5",
   "main": "cot",
   "dependencies": {
 	  "q": "0.9.x"
