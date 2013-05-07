@@ -35,11 +35,7 @@ describe('DbHandle', function() {
 				}
 			}});
 		})
-		.then(function() {
-			done();
-		})
-		.fail(done)
-		.done();
+		.nodeify(done);
 	});
 	
 	describe('#info', function() {
@@ -48,10 +44,8 @@ describe('DbHandle', function() {
 			.then(function(info) {
 				expect(info).to.be.a('object');
 				expect(info.doc_count).to.equal(2);
-				done();
 			})
-			.fail(done)
-			.done();
+			.nodeify(done);
 		});
 	});
 	
@@ -61,10 +55,8 @@ describe('DbHandle', function() {
 			.then(function(doc) {
 				expect(doc).to.be.a('object');
 				expect(doc.name).to.equal('Will Conant');
-				done();
 			})
-			.fail(done)
-			.done();
+			.nodeify(done);
 		});
 	});
 	
@@ -76,10 +68,8 @@ describe('DbHandle', function() {
 				expect(response.rows).to.be.array;
 				expect(response.rows.length).to.equal(1);
 				expect(response.rows[0].key).to.equal('Will Conant');
-				done();
 			})
-			.fail(done)
-			.done();
+			.nodeify(done);
 		});
 	});
 	
@@ -91,15 +81,9 @@ describe('DbHandle', function() {
 				return db.put(doc);
 			})
 			.then(function(response) {
-				try {
-					expect(response.error).to.equal('conflict');
-					done();
-				} catch (err) {
-					done(err);
-				}
+				expect(response.error).to.equal('conflict');
 			})
-			.fail(done)
-			.done();
+			.nodeify(done);
 		});
 	});
 	
@@ -134,15 +118,19 @@ describe('DbHandle', function() {
 				return db.get(doc._id);
 			})
 			.then(function(response) {
-				try {
-					expect(response._rev).to.equal(origRev);
-					done();
-				} catch(err) {
-					done(err);
-				}
+				expect(response._rev).to.equal(origRev);
 			})
-			.fail(done)
-			.done();
+			.nodeify(done);
+		});
+	});
+	
+	describe('#exists', function() {
+		it('should return null for nonexistent doc', function(done) {
+			db.exists('does-not-exist')
+			.then(function(doc) {
+				expect(doc).to.be.null;
+			})
+			.nodeify(done);
 		});
 	});
 });

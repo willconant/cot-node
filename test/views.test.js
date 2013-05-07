@@ -18,18 +18,17 @@ describe('DbHandle', function() {
 			for (var i = 1; i < 10; i++) {
 				docPromises.push(db.post({_id: 'doc-' + i, key: 'key-' + i}));
 			}
-			docPromises.push(db.post({_id: '_design/test', views: {
+			
+			var designDoc = {_id: '_design/test', views: {
 				testView: {
 					map: 'function(d) { emit(d.key, null); emit("z", null); }'
 				}				
-			}}));
+			}};
+			docPromises.push(db.post(designDoc));
+			
 			return Q.all(docPromises);
 		})
-		.then(function() {
-			done();
-		})
-		.fail(done)
-		.done();
+		.nodeify(done);
 	});
 	
 	describe('#view', function() {
@@ -41,10 +40,8 @@ describe('DbHandle', function() {
 				expect(response.rows[1].id).to.equal('doc-4');
 				expect(response.rows[2].id).to.equal('doc-5');
 				expect(response.rows[3].id).to.equal('doc-6');
-				done();
 			})
-			.fail(done)
-			.done();
+			.nodeify(done);
 		});
 	});
 });

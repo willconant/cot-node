@@ -144,7 +144,7 @@ DbHandle.prototype = {
 		});
 	},
 	
-	look: function(docId) {
+	exists: function(docId) {
 		return this.cot.jsonRequest('GET', this.docUrl(docId))
 		.then(function(response) {
 			if (response.statusCode === 404) {
@@ -200,7 +200,7 @@ DbHandle.prototype = {
 		return tryIt();
 	
 		function tryIt() {
-			return db.look(docId)
+			return db.exists(docId)
 			.then(function(doc) {
 				return fn(doc || {_id: docId});
 			})
