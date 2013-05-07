@@ -1,52 +1,80 @@
 # What is Cot? #
 
-Cot is a rather simple but quite pleasant interface for CouchDB. It doesn't attempt to implement everything, but it covers the important stuff for using couch as an effective database.
+Cot is a CouchDB library for nodejs with the following benefits:
+
+  - It produces promises using the excellent Q module.
+  - It has clear method names that map almost directly to CouchDB's HTTP API.
+  - It elminates redundancies in CouchDB's API when there is a clear advantage.
+    For instance, `post()` treats conflicts as errors, but `put()` treats 
+    conflicts as a normal state that callers can test for.
+  - It supports view and `_all_docs` queries.
+  - It supports regular changes queries and long-poll changes queries.
+  - It doesn't have any weird ORM-like behavior or caching. Documents are just
+    plain old javascript objects. Revs don't get updated on documents you pass
+    in.
+  - It doesn't implement the whole CouchDB API, but it has a generic method adequate
+    for interacting with any CouchDB URL that expects JSON as input and produces
+    JSON as output.
+    
+# Installing #
+
+    npm install cot
+
+# Examples #
+
+Here's a silly example that creates a new document and then updates it:
 
     var Cot = require('cot');
-    var cot = new Cot({port: 5984, hostname: 'localhost'});
-    var db = cot.db('my-db');
+    var db = new Cot({hostname: 'localhost', port: 5984}).db('my-db');
     
-    db.getDoc('counter', onGet);
+    var doc = {
+        title: 'So yeah, Cot is definitely another CouchDB library'
+    };
     
-    function onGet(err, doc) {
-    	if (err) throw err;
-    	
-    	if (doc === null) {
-    		doc = {
-    			_id: 'counter',
-    			count: 0
-    		};
-    	}
-    	
-    	doc.count += 1;
-    	
-    	db.putDoc(doc, {conflictOk: true}, onPut);
-    }
-    
-    function onPut(err, response) {
-    	if (err) throw err;
-    	
-    	if (response.conflict) {
-    		db.getDoc('counter', onGet);
-    	}
-    	else {
-    		console.log('done!');
-    	}
+    db.post(doc)
+    .then(function(response) {
+        doc._id = response.id;
+        doc._rev = response.rev;
+        doc.update = 'Time to update this document and save it again!';
+        return db.post(doc);
+    })
+    .then(function(response) {
+        // let's print out the rev because that would be cool
+        console.log(response.rev);
+    })
+    .fail(function(err) {
+        // if anything goes wrong, we'll end up here
+        console.log('errors are lame in examples');
+    });
+
+
+Here's an example that increments a counter and is aware of conflicts:
+
+    function incrementCounter(docId) {
+        return db.get(docId)
+        .then(function(doc) {
+            doc.counter += 1;
+            return db.put(doc);
+        })
+        .then(function(response) {
+            if (response.ok) {
+                return response;
+            } else {
+                // there was a conflict... try again
+                return incrementCounter(docId);
+            }
+        })
     }
 
-There's actually a utility function for an optimistic update loop:
+This pattern is very common in CouchDB, so Cot comes with a quicker way to do it:
 
-    db.updateDoc('counter', mutate, onUpdate);
-    
-    function mutate(doc, next) {
-    	doc.count = (doc.count || 0) + 1;
-    	next();
+    function incrementCounter(docId) {
+        return db.update(docId, function(doc) {
+            doc.counter += 1;
+            return doc;
+        });
     }
     
-    function onUpdate(err) {
-    	if (err) throw err;
-    	console.log('done!');
-    }
 
 # API Reference #
 
@@ -66,39 +94,102 @@ There's actually a utility function for an optimistic update loop:
 
 Returns an object representing the specified database.
 
-## db.info(next(err, info)) ##
 
-Queries database info and calls next when done.
+## promise = db.info() ##
 
-## db.getDoc(docId, next(err, doc))
+`GET /<dbName>`
 
-Gets a doc out of the database. If the doc is missing, err will be null and doc will be null.
 
-## db.getDocWhere(docId, condition(doc), next(err, doc))
+## promise = db.get(docId)
 
-Gets a doc out of the database and passes it to condition. If condition returns false, next will be called with doc === null as if the doc did not exist. This is useful for avoiding the easy mistake of writing code that allows access to your entire database:
+`GET /<dbName>/<docId>`
 
-    db.getDocWhere(query.docId, function(doc) { return doc.isPublic }, onGet);
+Missing documents are treated as an error.
 
-## db.putDoc(doc, [opts,] next(err, response))
 
-Attempts to put doc into database. The doc must have an `_id` field. If you expect to handle update conflicts, send {conflictOk: true} in opts. Otherwise, conflicts will be treated as errors. In any case, the response from couch is passed to next so you can retrieve the new rev or detect a conflict if `conflictOk: true`. Response may be something like:
+## promise = db.exists(docId)
 
-    {ok: true, rev: '2-whatever'}
+`GET /<dbName>/<docId>`
 
-Or, in case of a conflict where `conflictOk: true`:
+Returns whole document if docId exists and null if docId is missing
 
-    {error: 'conflict'}
 
-## db.updateDoc(doc, fn, next(err, response))
+## promise = db.post(doc)
 
-Reads doc from the database and calls `fn(doc, cb)`. `fn` may directly mutate doc and call `cb` when done. Then updateDoc will attempt to put the modified document back in the database. If there is an update conflict, the process will start over and repeat until success.
+`POST /<dbName>`
 
-## db.deleteDoc(docId, rev, [opts,] next)
+Creates a new document or updates an existing document. If `doc._id` is undefined, CouchDB will
+generate a new ID for you.
 
-Attempts to delete the document with the specified docId and rev. As with putDoc, you may pass `{conflictOk: true}` in opts.
+On 201, returns result from CouchDB which looks like: `{"ok":true, "id":"<docId>", "rev":"<docRev>"}`
 
-## db.view(designName, viewName, query, next(err, response))
+All other status codes (including 409, conflict) are treated as errors
+
+
+## promise = db.put(doc)
+
+`PUT /<dbName>/<doc._id>`
+
+On 409 (conflict) returns result from CouchDB which looks like: `{"error":"conflict"}`
+
+On 201, returns result from CouchDB which looks like: `{"ok":true, "id":"<docId>", "rev":"<docRev>"}`
+
+All other status codes are treated as errors.
+
+
+## promise = db.batch(doc)
+
+`POST /<dbName>?batch=ok`
+
+Creates or updates a document but doesn't wait for success. Conflicts will not be detected.
+
+On 202, returns result from CouchDB which looks like: `{"ok":true, "id":"<docId>"}`
+
+The rev isn't returned because CouchDB returns before checking for conflicts. If there is a conflict,
+the update will be silently lost.
+
+All other status codes are treated as errors.
+
+
+## promise = db.delete(docId, rev)
+
+`DELETE /<dbName>/<docId>?rev=<rev>`
+
+On 200, returns result from CouchDB which looks like: `{"ok":true, "id":"<docId>", "rev":"<docRev>"}`
+
+All othe status codes are treated as errors.
+
+If you wish to gracefully handle update conflicts while deleting, use `db.put()` on a document with
+`_deleted` set to `true`:
+
+    doc._deleted = true;
+    db.put(doc).then(function(response) {
+        if (!response.ok) {
+            // there was a conflict
+        }
+    });
+
+
+## promise = db.update(docId, updateFunction)
+
+Gets the specified document, passes it to `updateFunction`, and then saves the results of `updateFunction`
+over the document
+
+The process loops if there is an update conflict.
+
+If `updateFunction` needs to do asynchronous work, it may return a promise.
+
+
+## promise = db.bulk(arrayOfDocs)
+
+`POST /<dbName>/_bulk_docs`
+
+See CouchDB documentation for more information
+
+
+## promise = db.view(designName, viewName, query)
+
+`GET /<dbName>/_desgin/<designName>/_view/<viewName>?<properly encoded query>`
 
 Queries a view with the given name in the given design doc. `query` should be an object with any of the following keys:
 
@@ -120,23 +211,25 @@ Queries a view with the given name in the given design doc. `query` should be an
 
 For more information, refer to http://wiki.apache.org/couchdb/HTTP_view_API#Querying_Options
 
-## db.allDocs(query, next(err, response))
 
-Queries the _all_docs view. `query` supports the same keys as in `db.view`.
+## promise = db.allDocs(query)
 
-## db.viewKeys(designName, viewName, keys, next(err, response))
+`GET /<dbName>/_all_docs?<properly encoded query>`
+
+Queries the `_all_docs` view. `query` supports the same keys as in `db.view`.
+
+
+## promise = db.viewKeys(designName, viewName, keys)
 
 Queries the specified keys from the specified view. Keys should be an array of keys.
 
-## db.allDocsKeys(keys, next(err, response))
+
+## promise = db.allDocsKeys(keys)
 
 Loads documents with the specified keys.
 
-## db.postBulkDocs(docs, allOrNothing, next(err, response))
 
-Posts multiple updates to the database in one request. `docs` should be an array of documents. `allOrNothing` should be a boolean. See http://wiki.apache.org/couchdb/HTTP_Bulk_Document_API for more information.
-
-## db.changes(query, next)
+## promise = db.changes(query)
 
 Queries the changes feed given the specified query. `query` may contain the following keys:
 
