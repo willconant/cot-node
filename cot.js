@@ -23,6 +23,9 @@ THE SOFTWARE.
 'use strict';
 
 var querystring = require('querystring');
+var Q = require('q');
+
+module.exports = Cot;
 
 var viewQueryKeys = [
 	'descending', 'endkey', 'endkey_docid', 'group',
@@ -32,8 +35,6 @@ var viewQueryKeys = [
 ];
 
 var changesQueryKeys = ['filter', 'include_docs', 'limit', 'since', 'timeout'];
-
-module.exports = Cot;
 
 function Cot(opts) {
 	this.port = opts.port;
@@ -48,102 +49,66 @@ function Cot(opts) {
 }
 
 Cot.prototype = {
-	reqOpts: function (method, path, headers) {
-		var opts = {
+	jsonRequest: function(method, path, body) {
+		var deferred = Q.defer();
+		
+		var headers = {};
+		headers['accept'] = 'application/json';
+		headers['host'] = this.hostHeader;
+		if (body) {
+			headers['content-type'] = 'application/json';
+		}
+				
+		var request = this.http.request({
 			hostname: this.hostname,
 			port: this.port,
 			auth: this.auth,
 			path: path,
 			method: method,
-			headers: headers || {}
-		};
+			headers: headers
+		});
 		
-		opts.headers.host = this.hostHeader;
-				
-		return opts;
-	},
-	
-	processResponse: function (request, next) {
-		waitForResponse(request, onWaitForResponse);
+		request.on('error', deferred.reject.bind(deferred));
 		
-		function onWaitForResponse(err, response) {
-			if (err) { next(err); return; }
+		request.on('response', function(response) {
+			response.setEncoding('utf8');
 			
-			if (response.statusCode >= 300 || response.headers['content-type'] === 'application/json') {
-				readAllText(response, response.statusCode >= 300 ? 8192 : null, onReadAllText);
-			}
-			else {
-				next(null, response);
-			}
+			var buffer = '';
+			response.on('data', function(data) {
+				buffer += data;
+			});
 			
-			function onReadAllText(err, buffer) {
-				if (err) { next(err); return; }
-				
-				response.body = buffer;
+			response.on('error', deferred.reject.bind(deferred));
+			
+			response.on('end', function() {
+				var myResponse = {
+					statusCode: response.statusCode,
+					unparsedBody: buffer
+				};
 				
 				if (response.headers['content-type'] === 'application/json') {
 					try {
-						response.json = JSON.parse(response.body);
-					}
-					catch (err) {
-						next(err);
+						myResponse.body = JSON.parse(buffer);
+					} catch (err) {
+						deferred.reject(err);
 						return;
 					}
 				}
 				
-				next(null, response);
-			}
-		}
-	},
-	
-	GET: function (path, headers, next) {
-		headers = headers || {};
-		if (!headers.accept) {
-			headers.accept = 'application/json';
-		}
-	
-		var request = this.http.request(this.reqOpts('GET', path, headers));
-		this.processResponse(request, next);
-	},
-	
-	DELETE: function (path, headers, next) {
-		headers = headers || {};
-		if (!headers.accept) {
-			headers.accept = 'application/json';
-		}
-	
-		var request = this.http.request(this.reqOpts('DELETE', path, headers));
-		this.processResponse(request, next);
-	},
-	
-	putOrPost: function (which, path, body, headers, next) {
-		headers = headers || {};
-		if (!headers.accept) {
-			headers.accept = 'application/json';
+				deferred.resolve(myResponse);
+			});
+		});
+		
+		if (body) {
+			request.end(JSON.stringify(body));
+		} else {
+			request.end();
 		}
 		
-		if (typeof(body) === 'object' && !headers['content-type']) {
-			body = JSON.stringify(body);
-			headers['content-type'] = 'application/json';
-		}
-		else if (typeof(body) === 'string') {
-			body = new Buffer(body, 'utf8');
-		}
-		
-		var request = this.http.request(this.reqOpts(which, path, headers));
-		request.write(body);
-		this.processResponse(request, next);
+		return deferred.promise;
 	},
 	
-	PUT: function (path, body, headers, next) {
-		this.putOrPost('PUT', path, body, headers, next);
-	},
-	
-	POST: function (path, body, headers, next) {
-		this.putOrPost('POST', path, body, headers, next);
-	},
-	
-	db: function (name) {
+	db: function(name) {
 		return new DbHandle(this, name);
 	}
 };
@@ -154,7 +119,7 @@ function DbHandle(cot, name) {
 }
 
 DbHandle.prototype = {
-	docUrl: function (docId) {
+	docUrl: function(docId) {
 		if (typeof docId !== 'string') {
 			throw new TypeError('doc id must be a string');
 		}
@@ -164,65 +129,54 @@ DbHandle.prototype = {
 		return '/' + this.name + '/' + docId;
 	},
 	
-	info: function (next) {
-		this.cot.GET('/' + this.name, null, function (err, response) {
-			if (err) { next(err); return; }
-			
-			next(null, response.json);
+	info: function() {
+		return this.cot.jsonRequest('GET', '/' + this.name)
+		.then(function(response) {
+			return response.body;
 		});
 	},
 
-	getDoc: function (docId, next) {
-		this.cot.GET(this.docUrl(docId), null, function (err, response) {
-			if (err) { next(err); return; }
-			if (response.statusCode === 404) { next(null, null); return; }
-			if (response.statusCode !== 200) { next(new Error('error getting doc ' + docId + ': ' + response.body)); return; }
-			next(null, response.json);
+	getDoc: function(docId) {
+		return this.cot.jsonRequest('GET', this.docUrl(docId))
+		.then(function(response) {
+			if (response.statusCode === 404) {
+				return null;
+			} else if (response.statusCode !== 200) {
+				throw new Error('error getting doc ' + docId + ': ' + response.unparsedBody);
+			} else {
+				return response.body;
+			}
 		});
 	},
 	
-	getDocWhere: function (docId, condition, next) {
-		this.getDoc(docId, function (err, doc) {
-			if (err) { next(err); return; }
-			
+	getDocWhere: function(docId, condition) {
+		return this.getDoc(docId)
+		.then(function(doc) {
 			if (doc !== null && condition(doc)) {
-				next(null, doc);
-			}
-			else {
-				next(null, null);
+				return doc;
+			} else {
+				return null;
 			}
 		});
 	},
 	
-	putDoc: function (doc, opts, next) {
-		if (typeof next === 'undefined') {
-			next = opts;
-			opts = null;
-		}
-		
+	putDoc: function(doc, opts) {		
 		var url = this.docUrl(doc._id);
 		if (opts && opts.batch) {
 			url += '?batch=ok';
 		}
 		
-		this.cot.PUT(url, doc, null, function (err, response) {
-			if (err) { next(err); return; }
-			
+		return this.cot.jsonRequest('PUT', url, doc)
+		.then(function(response) {
 			if (response.statusCode === 201 || response.statusCode === 202 || (response.statusCode === 409 && opts && opts.conflictOk)) {
-				next(null, response.json);
-			}
-			else {
-				next(new Error('error putting doc ' + doc._id + ': ' + response.body));
+				return response.body;
+			} else {
+				throw new Error('error putting doc ' + doc._id + ': ' + response.unparsedBody);
 			}
 		});
 	},
 	
-	postDoc: function (doc, opts, next) {
-		if (typeof next === 'undefined') {
-			next = opts;
-			opts = null;
-		}
-		
+	postDoc: function(doc, opts) {		
 		var url = '/' + this.name;
 		if (opts && opts.batch) {
 			url += '?batch=ok';
@@ -232,160 +186,118 @@ DbHandle.prototype = {
 			throw new Error('doc._id must not be set when posting new document');
 		}
 		
-		this.cot.POST(url, doc, null, function (err, response) {
-			if (err) { next(err); return; }
-			
+		return this.cot.jsonRequest('POST', url, doc)
+		.then(function(response) {
 			if (response.statusCode === 201 || response.statusCode === 202) {
-				next(null, response.json);
-			}
-			else {
-				next(new Error('error posting doc ' + doc._id + ': ' + response.body));
+				return response.body;
+			} else {
+				throw new Error('error posting doc ' + doc._id + ': ' + response.unparsedBody);
 			}
 		});
 	},
 	
-	updateDoc: function (docId, fn, next) {
+	updateDoc: function(docId, fn) {
 		var db = this;
 		
-		tryIt();
+		return tryIt();
 	
 		function tryIt() {
-			db.getDoc(docId, onGot);
-		}
-		
-		function onGot(err, doc) {
-			if (err) { next(err); return; }
-			
-			if (doc === null) {
-				doc = {_id: docId};
-			}
-			fn(doc, onApplied);
-		}
-		
-		function onApplied(err, doc) {
-			if (err) { next(err); return; }
-			db.putDoc(doc, {conflictOk: true}, onPut);
-		}
-		
-		function onPut(err, response) {
-			if (err) { next(err); return; }
-			
-			if (response.ok) {
-				next(null, response);
-			}
-			else {
-				tryIt();
-			}
+			return db.getDoc(docId)
+			.then(function(doc) {
+				if (doc === null) doc = {_id: docId};
+				return fn(doc);
+			})
+			.then(function(doc) {
+				return db.putDoc(doc, {conflictOk: true});
+			})
+			.then(function(response) {
+				if (response.ok) {
+					return response
+				} else {
+					return tryIt();
+				}
+			})
 		}
 	},
 	
-	deleteDoc: function (docId, rev, opts, next) {
-		if (typeof next === 'undefined') {
-			next = opts;
-			opts = null;
-		}
-	
+	deleteDoc: function(docId, rev, opts) {
 		var url = this.docUrl(docId) + '?rev=' + encodeURIComponent(rev);
 		
-		this.cot.DELETE(url, null, function (err, response) {
-			if (err) { next(err); return; }
-			
+		return this.cot.jsonRequest('DELETE', url)
+		.then(function(response) {
 			if (response.statusCode === 200 || (response.statusCode === 409 && opts && opts.conflictOk)) {
-				next(null, response.json);
-			}
-			else {
-				next(new Error('error deleting doc ' + docId + ': ' + response.body));
+				return response.body;
+			} else {
+				throw new Error('error deleting doc ' + docId + ': ' + response.unparsedBody);
 			}
 		});
 	},
 	
-	viewQuery: function (path, query, next) {
-		if (typeof next === 'undefined') {
-			next = query;
-			query = null;
-		}
-	
+	viewQuery: function(path, query) {	
 		query = query || {};
 		var url = '/' + this.name + '/' + path;
 		var q = {};
-		viewQueryKeys.forEach(function (key) {
+		viewQueryKeys.forEach(function(key) {
 			if (typeof query[key] !== 'undefined') {
 				if (key === 'startkey_docid' || key === 'endkey_docid') {
 					q[key] = query[key];
-				}
-				else {
+				} else {
 					q[key] = JSON.stringify(query[key]);
 				}
 			}
 		});
 		
-		this.cot.GET(url + '?' + querystring.stringify(q), null, function (err, response) {
-			if (err) { next(err); return; }
-			
+		return this.cot.jsonRequest('GET', url + '?' + querystring.stringify(q))
+		.then(function(response) {
 			if (response.statusCode !== 200) {
-				next(new Error('error reading view ' + path + ': ' + response.body));
-			}
-			else {
-				next(null, response.json);
+				throw new Error('error reading view ' + path + ': ' + response.unparsedBody);
+			} else {
+				return response.body;
 			}
 		});
 	},
 	
-	view: function (designName, viewName, query, next) {
-		this.viewQuery('_design/' + designName + '/_view/' + viewName, query, next);
+	view: function(designName, viewName, query) {
+		return this.viewQuery('_design/' + designName + '/_view/' + viewName, query);
 	},
 	
-	allDocs: function (query, next) {
-		this.viewQuery('_all_docs', query, next);
+	allDocs: function(query) {
+		return this.viewQuery('_all_docs', query);
 	},
 	
-	viewKeysQuery: function (path, keys, next) {
+	viewKeysQuery: function(path, keys) {
 		var url = '/' + this.name + '/' + path;
-		this.cot.POST(url, {keys: keys}, null, function (err, response) {
-			if (err) { next(err); return; }
-			
+		return this.cot.jsonRequest('POST', url, {keys: keys})
+		.then(function(response) {
 			if (response.statusCode !== 200) {
-				next(new Error('error reading view ' + path + ': ' + response.body));
-			}
-			else {
-				next(null, response.json);
+				throw new Error('error reading view ' + path + ': ' + response.unparsedBody);
+			} else {
+				return response.body;
 			}
 		});
 	},
 	
-	viewKeys: function (designName, viewName, keys, next) {
-		this.viewKeysQuery('_design/' + designName + '/_view/' + viewName, keys, next);
+	viewKeys: function(designName, viewName, keys) {
+		return this.viewKeysQuery('_design/' + designName + '/_view/' + viewName, keys);
 	},
 	
-	allDocsKeys: function (keys, next) {
-		this.viewKeysQuery('_all_docs', keys, next);
+	allDocsKeys: function(keys) {
+		return this.viewKeysQuery('_all_docs', keys);
 	},
 	
-	postBulkDocs: function (docs, allOrNothing, next) {
-		if (typeof next === 'undefined') {
-			next = allOrNothing;
-			allOrNothing = false;
-		}
-		
+	postBulkDocs: function(docs, allOrNothing) {
 		var url = '/' + this.name + '/_bulk_docs';
-		this.cot.POST(url, {docs: docs, all_or_nothing: allOrNothing}, null, function (err, response) {
-			if (err) { next(err); return; }
-			
+		return this.cot.jsonRequest('POST', url, {docs: docs, all_or_nothing: allOrNothing})
+		.then(function(response) {
 			if (response.statusCode !== 201) {
-				next(new Error('error posting to _bulk_docs:' + response.body));
-			}
-			else {
-				next(null, response.json);
+				throw new Error('error posting to _bulk_docs:' + response.unparsedBody);
+			} else {
+				return response.body;
 			}
 		});
 	},
 	
-	changes: function (query, next) {
-		if (typeof next === 'undefined') {
-			next = query;
-			query = null;
-		}
-	
+	changes: function(query) {	
 		query = query || {};
 		var q = {};
 		changesQueryKeys.forEach(function (key) {
@@ -398,55 +310,13 @@ DbHandle.prototype = {
 			q.feed = 'longpoll';
 		}
 
-		this.cot.GET('/' + this.name + '/_changes?' + querystring.stringify(q), null, function (err, response) {
-			if (err) { next(err); return; }
-			
+		return this.cot.jsonRequest('GET', '/' + this.name + '/_changes?' + querystring.stringify(q))
+		.then(function(response) {
 			if (response.statusCode !== 200) {
-				next(new Error('error reading _changes: ' + response.body));
-			}
-			else {
-				next(null, response.json);
+				throw new Error('error reading _changes: ' + response.unparsedBody);
+			} else {
+				return response.body;
 			}
 		});
 	}
 };
-
-function waitForResponse(request, next) {
-	next = once(next);
-	
-	request.on('error', next);
-	
-	request.on('response', function (response) {
-		next(null, response);
-	});
-	
-	request.end();
-}
-
-function readAllText(stream, limit, next) {
-	next = once(next);
-	var buffer = '';
-	stream.encoding = 'utf8';
-	
-	stream.on('data', function (chunk) {
-		if (!limit || buffer.length < limit) {
-			buffer += chunk;
-		}
-	});
-	
-	stream.on('error', next);
-	
-	stream.on('end', function () {
-		next(null, buffer);
-	});
-}
-
-function once(f) {
-	var called = false;
-	return function() {
-		if (!called) {
-			called = true;
-			return f.apply(this, arguments);
-		}
-	};
-}

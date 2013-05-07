@@ -4,7 +4,9 @@
   "keywords": ["couch", "couchdb"],
   "version": "0.0.4",
   "main": "cot",
-  "dependencies": {},
+  "dependencies": {
+	  "q": "0.9.x"
+  },
   "author": {
     "name": "Will Conant",
     "email": "will.conant@gmail.com",

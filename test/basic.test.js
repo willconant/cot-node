@@ -21,121 +21,88 @@ describe('DbHandle', function() {
 	var db = cot.db(config.dbName);
 	
 	beforeEach(function(done) {
-		cot.DELETE('/' + config.dbName, {}, onDelete);
-		
-		function onDelete(err) {
-			if (err) {
-				done(err);
-			}
-			else {
-				cot.PUT('/' + config.dbName, '', {}, onPut);
-			}
-		}
-		
-		function onPut(err) {
-			if (err) {
-				done(err);
-			}
-			else {
-				db.putDoc({_id: 'person-1', type: 'person', name: 'Will Conant'}, onPutDoc);
-			}
-		}
-		
-		function onPutDoc(err) {
-			if (err) {
-				done(err);
-			}
-			else {
-				db.putDoc({_id: '_design/test', views: {
-					testView: {
-						map: 'function(d) { emit(d.name, null) }'
-					}
-				}}, done);
-			}
-		}
+		cot.jsonRequest('DELETE', '/' + config.dbName)
+		.then(function() {
+			return cot.jsonRequest('PUT', '/' + config.dbName);
+		})
+		.then(function() {
+			return db.putDoc({_id: 'person-1', type: 'person', name: 'Will Conant'});
+		})
+		.then(function() {
+			return db.putDoc({_id: '_design/test', views: {
+				testView: {
+					map: 'function(d) { emit(d.name, null) }'
+				}
+			}});
+		})
+		.then(function() {
+			done();
+		})
+		.fail(done)
+		.done();
 	});
 	
 	describe('#info', function() {
 		it('should return database info', function(done) {
-			db.info(onInfo);
-			
-			function onInfo(err, info) {
-				if (err) {
-					done(err);
-				}
-				else {
-					expect(info).to.be.a('object');
-					expect(info.doc_count).to.equal(2);
-					done();
-				}
-			}
+			db.info()
+			.then(function(info) {
+				expect(info).to.be.a('object');
+				expect(info.doc_count).to.equal(2);
+				done();
+			})
+			.fail(done)
+			.done();
 		});
 	});
 	
 	describe('#getDoc', function() {
 		it('should return test document from database', function(done) {
-			db.getDoc('person-1', onGet);
-			
-			function onGet(err, doc) {
-				if (err) {
-					done(err);
-				}
-				else {
-					expect(doc).to.be.a('object');
-					expect(doc.name).to.equal('Will Conant');
-					done();
-				}
-			}
+			db.getDoc('person-1')
+			.then(function(doc) {
+				expect(doc).to.be.a('object');
+				expect(doc.name).to.equal('Will Conant');
+				done();
+			})
+			.fail(done)
+			.done();
 		});
 	});
 	
 	describe('#getDocWhere', function() {
 		it('should return null when condition does not match', function(done) {
-			db.getDocWhere('person-1', function(doc) { return doc.type === 'clown' }, onGetDoc)
-			
-			function onGetDoc(err, doc) {
-				if (err) {
-					done(err);
-				}
-				else {
-					expect(doc).to.be.null;
-					done();
-				}
-			}
+			db.getDocWhere('person-1', function(doc) { return doc.type === 'clown' })
+			.then(function(doc) {
+				expect(doc).to.be.null;
+				done();
+			})
+			.fail(done)
+			.done();
 		});
 		
 		it('should return doc when condition matches', function(done) {
-			db.getDocWhere('person-1', function(doc) { return doc.type === 'person' }, onGetDoc)
-			
-			function onGetDoc(err, doc) {
-				if (err) {
-					done(err);
-				}
-				else {
-					expect(doc).to.be.a('object');
-					expect(doc.name).to.equal('Will Conant');
-					done();
-				}
-			}
+			db.getDocWhere('person-1', function(doc) { return doc.type === 'person' })
+			.then(function(doc) {
+				expect(doc).to.be.a('object');
+				expect(doc.name).to.equal('Will Conant');
+				done();
+			})
+			.fail(done)
+			.done();
 		});
 	});
 	
 	describe('#view', function() {
 		it('should return a single row', function(done) {
-			db.view('test', 'testView', {}, onView);
-			
-			function onView(err, response) {
-				if (err) {
-					done(err)
-				}
-				else {
-					expect(response).to.be.object;
-					expect(response.rows).to.be.array;
-					expect(response.rows.length).to.equal(1);
-					expect(response.rows[0].key).to.equal('Will Conant');
-					done();
-				}
-			}
+			db.view('test', 'testView', {})
+			.then(function(response) {
+				expect(response).to.be.object;
+				expect(response.rows).to.be.array;
+				expect(response.rows.length).to.equal(1);
+				expect(response.rows[0].key).to.equal('Will Conant');
+				done();
+			})
+			.fail(done)
+			.done();
 		});
 	});
 });
