@@ -16,9 +16,9 @@ describe('DbHandle', function() {
 		.then(function() {
 			var docPromises = [];
 			for (var i = 1; i < 10; i++) {
-				docPromises.push(db.putDoc({_id: 'doc-' + i, key: 'key-' + i}));
+				docPromises.push(db.post({_id: 'doc-' + i, key: 'key-' + i}));
 			}
-			docPromises.push(db.putDoc({_id: '_design/test', views: {
+			docPromises.push(db.post({_id: '_design/test', views: {
 				testView: {
 					map: 'function(d) { emit(d.key, null); emit("z", null); }'
 				}				

@@ -26,10 +26,10 @@ describe('DbHandle', function() {
 			return cot.jsonRequest('PUT', '/' + config.dbName);
 		})
 		.then(function() {
-			return db.putDoc({_id: 'person-1', type: 'person', name: 'Will Conant'});
+			return db.post({_id: 'person-1', type: 'person', name: 'Will Conant'});
 		})
 		.then(function() {
-			return db.putDoc({_id: '_design/test', views: {
+			return db.post({_id: '_design/test', views: {
 				testView: {
 					map: 'function(d) { emit(d.name, null) }'
 				}
@@ -55,32 +55,9 @@ describe('DbHandle', function() {
 		});
 	});
 	
-	describe('#getDoc', function() {
+	describe('#get', function() {
 		it('should return test document from database', function(done) {
-			db.getDoc('person-1')
-			.then(function(doc) {
-				expect(doc).to.be.a('object');
-				expect(doc.name).to.equal('Will Conant');
-				done();
-			})
-			.fail(done)
-			.done();
-		});
-	});
-	
-	describe('#getDocWhere', function() {
-		it('should return null when condition does not match', function(done) {
-			db.getDocWhere('person-1', function(doc) { return doc.type === 'clown' })
-			.then(function(doc) {
-				expect(doc).to.be.null;
-				done();
-			})
-			.fail(done)
-			.done();
-		});
-		
-		it('should return doc when condition matches', function(done) {
-			db.getDocWhere('person-1', function(doc) { return doc.type === 'person' })
+			db.get('person-1')
 			.then(function(doc) {
 				expect(doc).to.be.a('object');
 				expect(doc.name).to.equal('Will Conant');
@@ -100,6 +77,69 @@ describe('DbHandle', function() {
 				expect(response.rows.length).to.equal(1);
 				expect(response.rows[0].key).to.equal('Will Conant');
 				done();
+			})
+			.fail(done)
+			.done();
+		});
+	});
+	
+	describe('#put', function() {
+		it('should treat conflicts as expected', function(done) {
+			var doc = {_id: 'put-test'};
+			db.put(doc)
+			.then(function(response) {
+				return db.put(doc);
+			})
+			.then(function(response) {
+				try {
+					expect(response.error).to.equal('conflict');
+					done();
+				} catch (err) {
+					done(err);
+				}
+			})
+			.fail(done)
+			.done();
+		});
+	});
+	
+	describe('#post', function() {
+		it('should treat conflicts as errors', function(done) {
+			var doc = {_id: 'post-test'};
+			db.post(doc)
+			.then(function(response) {
+				return db.post(doc);
+			})
+			.then(function(response) {
+				done(new Error('should not have resolved'));
+			})
+			.fail(function() {
+				done();
+			})
+			.done();
+		});
+	});
+	
+	describe('#batch', function() {
+		it('should ignore conflicts', function(done) {
+			var doc = {_id: 'batch-test'};
+			var origRev;
+			db.post(doc)
+			.then(function(response) {
+				origRev = response.rev;
+				return db.batch(doc);
+			})
+			.delay(100)
+			.then(function(response) {
+				return db.get(doc._id);
+			})
+			.then(function(response) {
+				try {
+					expect(response._rev).to.equal(origRev);
+					done();
+				} catch(err) {
+					done(err);
+				}
 			})
 			.fail(done)
 			.done();

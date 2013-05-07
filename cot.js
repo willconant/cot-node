@@ -120,13 +120,10 @@ function DbHandle(cot, name) {
 
 DbHandle.prototype = {
 	docUrl: function(docId) {
-		if (typeof docId !== 'string') {
-			throw new TypeError('doc id must be a string');
+		if (typeof docId !== 'string' || docId.length === 0) {
+			throw new TypeError('doc id must be a non-empty string');
 		}
-		if (docId.indexOf('_design/') !== 0) {
-			docId = encodeURIComponent(docId);
-		}
-		return '/' + this.name + '/' + docId;
+		return '/' + this.name + '/' + encodeURIComponent(docId);
 	},
 	
 	info: function() {
@@ -136,7 +133,18 @@ DbHandle.prototype = {
 		});
 	},
 
-	getDoc: function(docId) {
+	get: function(docId) {
+		return this.cot.jsonRequest('GET', this.docUrl(docId))
+		.then(function(response) {
+			if (response.statusCode !== 200) {
+				throw new Error('error getting doc ' + docId + ': ' + response.unparsedBody);
+			} else {
+				return response.body;
+			}
+		});
+	},
+	
+	look: function(docId) {
 		return this.cot.jsonRequest('GET', this.docUrl(docId))
 		.then(function(response) {
 			if (response.statusCode === 404) {
@@ -149,26 +157,10 @@ DbHandle.prototype = {
 		});
 	},
 	
-	getDocWhere: function(docId, condition) {
-		return this.getDoc(docId)
-		.then(function(doc) {
-			if (doc !== null && condition(doc)) {
-				return doc;
-			} else {
-				return null;
-			}
-		});
-	},
-	
-	putDoc: function(doc, opts) {		
-		var url = this.docUrl(doc._id);
-		if (opts && opts.batch) {
-			url += '?batch=ok';
-		}
-		
-		return this.cot.jsonRequest('PUT', url, doc)
+	put: function(doc) {		
+		return this.cot.jsonRequest('PUT', this.docUrl(doc._id), doc)
 		.then(function(response) {
-			if (response.statusCode === 201 || response.statusCode === 202 || (response.statusCode === 409 && opts && opts.conflictOk)) {
+			if (response.statusCode === 201 || response.statusCode === 409) {
 				return response.body;
 			} else {
 				throw new Error('error putting doc ' + doc._id + ': ' + response.unparsedBody);
@@ -176,39 +168,44 @@ DbHandle.prototype = {
 		});
 	},
 	
-	postDoc: function(doc, opts) {		
-		var url = '/' + this.name;
-		if (opts && opts.batch) {
-			url += '?batch=ok';
-		}
-
-		if (typeof doc._id !== 'undefined') {
-			throw new Error('doc._id must not be set when posting new document');
-		}
-		
-		return this.cot.jsonRequest('POST', url, doc)
+	post: function(doc) {
+		return this.cot.jsonRequest('POST', '/' + this.name, doc)
 		.then(function(response) {
-			if (response.statusCode === 201 || response.statusCode === 202) {
+			if (response.statusCode === 201) {
 				return response.body;
-			} else {
+			} else if (doc._id) {
 				throw new Error('error posting doc ' + doc._id + ': ' + response.unparsedBody);
+			} else {
+				throw new Error('error posting new doc: ' + response.unparsedBody);
 			}
 		});
 	},
 	
-	updateDoc: function(docId, fn) {
+	batch: function(doc) {
+		return this.cot.jsonRequest('POST', '/' + this.name + '?batch=ok', doc)
+		.then(function(response) {
+			if (response.statusCode === 202) {
+				return response.body;
+			} else if (doc._id) {
+				throw new Error('error batch posting doc ' + doc._id + ': ' + response.unparsedBody);
+			} else {
+				throw new Error('error batch posting new doc: ' + response.unparsedBody);
+			}
+		});
+	},
+	
+	update: function(docId, fn) {
 		var db = this;
 		
 		return tryIt();
 	
 		function tryIt() {
-			return db.getDoc(docId)
+			return db.look(docId)
 			.then(function(doc) {
-				if (doc === null) doc = {_id: docId};
-				return fn(doc);
+				return fn(doc || {_id: docId});
 			})
 			.then(function(doc) {
-				return db.putDoc(doc, {conflictOk: true});
+				return db.put(doc);
 			})
 			.then(function(response) {
 				if (response.ok) {
@@ -216,19 +213,31 @@ DbHandle.prototype = {
 				} else {
 					return tryIt();
 				}
-			})
+			});
 		}
 	},
 	
-	deleteDoc: function(docId, rev, opts) {
+	delete: function(docId, rev) {
 		var url = this.docUrl(docId) + '?rev=' + encodeURIComponent(rev);
 		
 		return this.cot.jsonRequest('DELETE', url)
 		.then(function(response) {
-			if (response.statusCode === 200 || (response.statusCode === 409 && opts && opts.conflictOk)) {
+			if (response.statusCode === 200) {
 				return response.body;
 			} else {
 				throw new Error('error deleting doc ' + docId + ': ' + response.unparsedBody);
+			}
+		});
+	},
+	
+	bulk: function(docs) {
+		var url = '/' + this.name + '/_bulk_docs';
+		return this.cot.jsonRequest('POST', url, {docs: docs})
+		.then(function(response) {
+			if (response.statusCode !== 201) {
+				throw new Error('error posting to _bulk_docs:' + response.unparsedBody);
+			} else {
+				return response.body;
 			}
 		});
 	},
@@ -283,18 +292,6 @@ DbHandle.prototype = {
 	
 	allDocsKeys: function(keys) {
 		return this.viewKeysQuery('_all_docs', keys);
-	},
-	
-	postBulkDocs: function(docs, allOrNothing) {
-		var url = '/' + this.name + '/_bulk_docs';
-		return this.cot.jsonRequest('POST', url, {docs: docs, all_or_nothing: allOrNothing})
-		.then(function(response) {
-			if (response.statusCode !== 201) {
-				throw new Error('error posting to _bulk_docs:' + response.unparsedBody);
-			} else {
-				return response.body;
-			}
-		});
 	},
 	
 	changes: function(query) {	
