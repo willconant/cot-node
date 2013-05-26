@@ -38,6 +38,18 @@ describe('DbHandle', function() {
 		.nodeify(done);
 	});
 	
+	describe('#docUrl', function() {
+		it('should encode doc ids', function() {
+			var encoded = db.docUrl('foo/bar');
+			expect(encoded).to.equal('/test-cot-node/foo%2Fbar');
+		});
+	
+		it('should not encode first slash in design doc ids', function() {
+			var encoded = db.docUrl('_design/foo/bar');
+			expect(encoded).to.equal('/test-cot-node/_design/foo%2Fbar');
+		});
+	});
+	
 	describe('#info', function() {
 		it('should return database info', function(done) {
 			db.info()

@@ -123,7 +123,12 @@ DbHandle.prototype = {
 		if (typeof docId !== 'string' || docId.length === 0) {
 			throw new TypeError('doc id must be a non-empty string');
 		}
-		return '/' + this.name + '/' + encodeURIComponent(docId);
+		
+		if (docId.indexOf('_design/') === 0) {
+			return '/' + this.name + '/_design/' + encodeURIComponent(docId.substr(8));
+		} else {
+			return '/' + this.name + '/' + encodeURIComponent(docId);
+		}
 	},
 	
 	info: function() {
