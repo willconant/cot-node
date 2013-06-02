@@ -2,7 +2,7 @@
   "name": "cot",
   "description": "promise-based CouchDB library with no surprises (in a good way)",
   "keywords": ["couch", "couchdb", "promise", "promises"],
-  "version": "0.0.5",
+  "version": "0.0.6",
   "main": "cot",
   "dependencies": {
 	  "q": "0.9.x"
