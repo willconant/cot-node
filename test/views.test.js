@@ -28,7 +28,13 @@ describe('DbHandle', function() {
 			
 			return Q.all(docPromises);
 		})
-		.nodeify(done);
+		.then(
+			function(ret) {
+				done(null, ret);
+			},
+			function(err) {
+				done(err);
+			});
 	});
 	
 	describe('#view', function() {
@@ -41,7 +47,13 @@ describe('DbHandle', function() {
 				expect(response.rows[2].id).to.equal('doc-5');
 				expect(response.rows[3].id).to.equal('doc-6');
 			})
-			.nodeify(done);
+			.then(
+				function(ret) {
+					done(null, ret);
+				},
+				function(err) {
+					done(err);
+				});
 		});
 	});
 });

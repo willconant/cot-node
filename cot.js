@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013 Will Conant, http://willconant.com/
+Copyright (c) 2013, 2017 Will Conant, http://conant.xyz/
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,6 @@ THE SOFTWARE.
 'use strict';
 
 var querystring = require('querystring');
-var Q = require('q');
 
 module.exports = Cot;
 
@@ -50,62 +49,60 @@ function Cot(opts) {
 
 Cot.prototype = {
 	jsonRequest: function(method, path, body) {
-		var deferred = Q.defer();
-		
-		var headers = {};
-		headers['accept'] = 'application/json';
-		headers['host'] = this.hostHeader;
-		if (body) {
-			headers['content-type'] = 'application/json';
-		}
-				
-		var request = this.http.request({
-			hostname: this.hostname,
-			port: this.port,
-			auth: this.auth,
-			path: path,
-			method: method,
-			headers: headers
-		});
-		
-		request.on('error', deferred.reject.bind(deferred));
-		
-		request.on('response', function(response) {
-			response.setEncoding('utf8');
-			
-			var buffer = '';
-			response.on('data', function(data) {
-				buffer += data;
+		return new Promise(function(resolve, reject) {
+			var headers = {};
+			headers['accept'] = 'application/json';
+			headers['host'] = this.hostHeader;
+			if (body) {
+				headers['content-type'] = 'application/json';
+			}
+					
+			var request = this.http.request({
+				hostname: this.hostname,
+				port: this.port,
+				auth: this.auth,
+				path: path,
+				method: method,
+				headers: headers
 			});
 			
-			response.on('error', deferred.reject.bind(deferred));
+			request.on('error', reject);
 			
-			response.on('end', function() {
-				var myResponse = {
-					statusCode: response.statusCode,
-					unparsedBody: buffer
-				};
+			request.on('response', function(response) {
+				response.setEncoding('utf8');
 				
-				if (response.headers['content-type'] === 'application/json') {
-					try {
-						myResponse.body = JSON.parse(buffer);
-					} catch (err) {
-						deferred.reject(err);
-						return;
+				var buffer = '';
+				response.on('data', function(data) {
+					buffer += data;
+				});
+				
+				response.on('error', reject);
+				
+				response.on('end', function() {
+					var myResponse = {
+						statusCode: response.statusCode,
+						unparsedBody: buffer
+					};
+					
+					if (response.headers['content-type'] === 'application/json') {
+						try {
+							myResponse.body = JSON.parse(buffer);
+						} catch (err) {
+							reject(err);
+							return;
+						}
 					}
-				}
-				
-				deferred.resolve(myResponse);
+					
+					resolve(myResponse);
+				});
 			});
-		});
-		
-		if (body) {
-			request.end(JSON.stringify(body));
-		} else {
-			request.end();
-		}
-		
-		return deferred.promise;
+			
+			if (body) {
+				request.end(JSON.stringify(body));
+			} else {
+				request.end();
+			}
+		}.bind(this))
 	},
 	
 	db: function(name) {

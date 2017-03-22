@@ -35,7 +35,13 @@ describe('DbHandle', function() {
 				}
 			}});
 		})
-		.nodeify(done);
+		.then(
+			function(ret) {
+				done(null, ret);
+			},
+			function(err) {
+				done(err);
+			});
 	});
 	
 	describe('#docUrl', function() {
@@ -57,7 +63,13 @@ describe('DbHandle', function() {
 				expect(info).to.be.a('object');
 				expect(info.doc_count).to.equal(2);
 			})
-			.nodeify(done);
+			.then(
+				function(ret) {
+					done(null, ret);
+				},
+				function(err) {
+					done(err);
+				});
 		});
 	});
 	
@@ -68,7 +80,13 @@ describe('DbHandle', function() {
 				expect(doc).to.be.a('object');
 				expect(doc.name).to.equal('Will Conant');
 			})
-			.nodeify(done);
+			.then(
+				function(ret) {
+					done(null, ret);
+				},
+				function(err) {
+					done(err);
+				});
 		});
 	});
 	
@@ -81,7 +99,13 @@ describe('DbHandle', function() {
 				expect(response.rows.length).to.equal(1);
 				expect(response.rows[0].key).to.equal('Will Conant');
 			})
-			.nodeify(done);
+			.then(
+				function(ret) {
+					done(null, ret);
+				},
+				function(err) {
+					done(err);
+				});
 		});
 	});
 	
@@ -95,7 +119,13 @@ describe('DbHandle', function() {
 			.then(function(response) {
 				expect(response.error).to.equal('conflict');
 			})
-			.nodeify(done);
+			.then(
+				function(ret) {
+					done(null, ret);
+				},
+				function(err) {
+					done(err);
+				});
 		});
 	});
 	
@@ -106,13 +136,13 @@ describe('DbHandle', function() {
 			.then(function(response) {
 				return db.post(doc);
 			})
-			.then(function(response) {
-				done(new Error('should not have resolved'));
-			})
-			.fail(function() {
-				done();
-			})
-			.done();
+			.then(
+				function(response) {
+					done(new Error('should not have resolved'));
+				},
+				function(err) {
+					done();
+				})
 		});
 	});
 	
@@ -125,14 +155,24 @@ describe('DbHandle', function() {
 				origRev = response.rev;
 				return db.batch(doc);
 			})
-			.delay(100)
+			.then(function() {
+				return new Promise(function(resolve, reject) {
+					setTimeout(resolve, 100);
+				});
+			})
 			.then(function(response) {
 				return db.get(doc._id);
 			})
 			.then(function(response) {
 				expect(response._rev).to.equal(origRev);
 			})
-			.nodeify(done);
+			.then(
+				function(ret) {
+					done(null, ret);
+				},
+				function(err) {
+					done(err);
+				});
 		});
 	});
 	
@@ -142,7 +182,13 @@ describe('DbHandle', function() {
 			.then(function(doc) {
 				expect(doc).to.be.null;
 			})
-			.nodeify(done);
+			.then(
+				function(ret) {
+					done(null, ret);
+				},
+				function(err) {
+					done(err);
+				});
 		});
 	});
 });
