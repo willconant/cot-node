@@ -2,7 +2,7 @@
 
 Cot is a CouchDB library for nodejs with the following benefits:
 
-  - It produces promises using the excellent Q module.
+  - It provides a promise-based API.
   - It has clear method names that map almost directly to CouchDB's HTTP API.
   - It takes advantage of redundancies in the CouchDB API to map responses back to promises.
     For instance, `post()` treats conflicts as errors, but `put()` treats 
@@ -38,14 +38,16 @@ Here's a silly example that creates a new document and then updates it:
         doc.update = 'Time to update this document and save it again!';
         return db.post(doc);
     })
-    .then(function(response) {
-        // let's print out the rev because that would be cool
-        console.log(response.rev);
-    })
-    .fail(function(err) {
-        // if anything goes wrong, we'll end up here
-        console.log('errors are lame in examples');
-    });
+    .then(
+        function(response) {
+            // let's print out the rev because that would be cool
+            console.log(response.rev);
+        },
+        function(err) {
+            // if anything goes wrong, we'll end up here
+            console.log('errors are lame in examples');
+        }
+    );
 
 
 Here's an example that increments a counter and is aware of conflicts:
